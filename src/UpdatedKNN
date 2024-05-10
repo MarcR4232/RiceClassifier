@@ -1,0 +1,88 @@
+import pathlib
+import matplotlib.pyplot as plt # type: ignore
+from skimage.transform import resize # type: ignore
+from skimage.color import rgb2gray # type: ignore
+from skimage.feature import hog # type: ignore
+from sklearn.model_selection import train_test_split # type: ignore
+from sklearn.neighbors import KNeighborsClassifier # type: ignore
+from sklearn.metrics import accuracy_score, classification_report, confusion_matrix # type: ignore
+import numpy as np # type: ignore
+
+def load_image_data():
+    data_fol = "./Rice_Image_Dataset"
+    data_fol = pathlib.Path(data_fol)
+
+    arborio_list = list(data_fol.glob('Arborio/*'))
+    basmati_list = list(data_fol.glob('Basmati/*'))
+    ipsala_list = list(data_fol.glob('Ipsala/*'))
+    jasmine_list = list(data_fol.glob('Jasmine/*'))
+    karacadag_list = list(data_fol.glob('Karacadag/*'))
+
+    rice_images = {
+        'arborio': arborio_list,
+        'basmati': basmati_list,
+        'ipsala': ipsala_list,
+        'jasmine': jasmine_list,
+        'karacadag': karacadag_list
+    }
+
+    X = []
+    y = []
+
+    for label, fold_path in rice_images.items():
+        for image_path in fold_path:
+            image = plt.imread(image_path)
+            image = resize(image, (100, 100))
+            image = rgb2gray(image)
+            features = hog(image, orientations=8, pixels_per_cell=(16, 16), cells_per_block=(1, 1))
+            X.append(features)
+            y.append(label)
+
+    return X, y
+
+def split_data(X_data, y_labels, train_split=.8):
+    return train_test_split(X_data, y_labels, train_size=train_split, random_state=42)
+
+def test_different_k_values(X_train, y_train, X_test, y_test, k_values):
+    results = {}
+    confusion_matrices = {}
+    error_samples = {}
+
+    for k in k_values:
+        knn = KNeighborsClassifier(n_neighbors=k)
+        knn.fit(X_train, y_train)
+        y_pred = knn.predict(X_test)
+        accuracy = accuracy_score(y_test, y_pred)
+        results[k] = accuracy
+
+        confusion_matrice = confusion_matrix(y_test, y_pred)
+        confusion_matrices[k] = confusion_matrice
+
+        error = np.where(y_pred != y_test)[0]
+        error_samples[k] = error
+
+    return results, confusion_matrices, error_samples
+
+X_data, y_data = load_image_data()
+X_train, X_test, y_train, y_test = split_data(X_data, y_data)
+
+# Here I implemented a series of different k values to be tested
+k_values_to_test = [1,3, 5, 7, 9]
+
+# Here a series of different values are also going to be tested
+accuracy_results, confusion_matrices, error_samples = test_different_k_values(X_train, y_train, X_test, y_test, k_values_to_test)
+
+# This prints all the accuracy results for k
+for k, accuracy in accuracy_results.items():
+    print(f"Th calculated accuracy of k = {k}: {accuracy}")
+
+# Specific values of k adhere to the confusion matrix
+confusion_matrix_k5 = confusion_matrices[5]
+print("Current Confusion matrix for k=5:")
+print(confusion_matrix_k5)
+
+# The error samples are going to be printed hee
+error_samples_k5 = error_samples[5]
+print("The error samples for k=5 are equal to:")
+for index in error_samples_k5:
+    print(f"Sample index: {index}, True label: {y_test[index]}, Predicted label: {knn.predict([X_test[index]])}") # type: ignore
